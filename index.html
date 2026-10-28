@@ -72,7 +72,7 @@
                 s.className = t.name === "get_weather" ? "" : "spot"
                 const { area, days, indoor } = t.input
                 s.textContent = t.name === "get_weather"
-                    ? `☁️ 날씨 ${area} ${days || 3}일`
+                    ? `☁️ 날씨 ${area} ${days || 3}일 예보`
                     : `📍 장소 ${area} ${indoor === undefined ? "전체" : indoor ? "실내" : "야외"}`
                 div.appendChild(s)
             }
