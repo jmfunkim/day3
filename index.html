@@ -10,8 +10,8 @@
         body { display: flex; flex-direction: column; }
         #header { flex: none; padding: 12px 14px; background: #0f2a3d; color: #fff; }
         #header h1 { margin: 0; font-size: 17px; }
-        #main { flex: 1; display: flex; min-height: 0; }
-        #chat { width: 280px; flex: none; display: flex; flex-direction: column; border-right: 1px solid #ccc; background: #fff; }
+        #main { flex: 1; display: flex; flex-direction: row-reverse; min-height: 0; }
+        #chat { width: 280px; flex: none; display: flex; flex-direction: column; border-left: 1px solid #ccc; background: #fff; }
         #log { flex: 1; overflow-y: auto; padding: 8px; }
         .msg { max-width: 88%; margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; line-height: 1.5; white-space: pre-wrap; word-break: keep-all; }
         .bot { background: #f1f1f1; }
@@ -24,7 +24,7 @@
         #go { padding: 8px 14px; border: 0; border-radius: 6px; background: #ff7a45; color: #fff; font-size: 14px; cursor: pointer; }
         #go:disabled { opacity: .5; cursor: wait; }
         #map { flex: 1; }
-        @media (max-width: 700px) { #main { flex-direction: column-reverse; } #chat { width: auto; height: 50%; border-right: 0; } }
+        @media (max-width: 700px) { #main { flex-direction: column-reverse; } #chat { width: auto; height: 50%; border-left: 0; } }
     </style>
 </head>
 <body>
