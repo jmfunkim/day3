@@ -33,12 +33,17 @@
     <script src="api/tools.js"></script>
     <script>
         const map = L.map("map").setView([33.38, 126.55], 10)
-        // tile.openstreetmap.org 는 file:// 로 열면(Referer 없음) 403 으로 막는다. CARTO 타일은 같은 OSM 데이터라 file:// 에서도 열린다.
-        L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png", {
-            maxZoom: 18,
-            subdomains: "abcd",
-            attribution: "&copy; OpenStreetMap contributors &copy; CARTO",
-        }).addTo(map)
+        // tile.openstreetmap.org 는 file:// 로 열면(Referer 없음) 403 으로 막는다. http:// 로 열면 OSM, file:// 이면 키 없는 Esri 타일을 쓴다.
+        const isFile = location.protocol === "file:"
+        L.tileLayer(
+            isFile
+                ? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
+                : "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+            {
+                maxZoom: 18,
+                attribution: isFile ? "Tiles &copy; Esri" : "&copy; OpenStreetMap contributors",
+            }
+        ).addTo(map)
         const layer = L.layerGroup().addTo(map)
 
         document.getElementById("go").onclick = () => {
