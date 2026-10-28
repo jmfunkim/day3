@@ -3,92 +3,112 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>제주 관광지 지도</title>
+    <title>실시간 지진 지도</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <style>
-        body { margin: 0; font-family: sans-serif; }
-        #bar { padding: 8px; display: flex; gap: 8px; align-items: center; }
-        #map { height: 60vh; }
-        #list { margin: 8px; padding-left: 20px; }
+        html, body { height: 100%; margin: 0; background: #0b0f1a; color: #e8ecf5; font-family: sans-serif; }
+        body { display: flex; flex-direction: column; }
+        #bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 10px 14px; background: #121829; border-bottom: 1px solid #263050; }
+        #bar h1 { font-size: 18px; margin: 0 8px 0 0; }
+        select, button { background: #1b2340; color: #e8ecf5; border: 1px solid #34406a; border-radius: 6px; padding: 6px 10px; }
+        #stats { margin-left: auto; font-size: 14px; color: #9fb0e0; }
+        #map { flex: 1; background: #0b0f1a; }
+        /* 지도를 어둡게: 타일에 반전 필터 */
+        .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(0.75) contrast(0.9) saturate(0.6); }
+        .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: #121829; color: #e8ecf5; }
+        .leaflet-popup-content a { color: #7fb2ff; }
+        #legend { position: absolute; right: 12px; bottom: 28px; z-index: 1000; background: #121829cc; border: 1px solid #263050; border-radius: 8px; padding: 8px 12px; font-size: 12px; line-height: 1.7; }
+        #legend i { display: inline-block; width: 11px; height: 11px; border-radius: 50%; margin-right: 6px; }
+        /* 규모 6 이상은 파문이 번지는 효과 */
+        .pulse { width: 12px; height: 12px; border-radius: 50%; border: 2px solid #ff3b5c; animation: pulse 1.8s ease-out infinite; }
+        @keyframes pulse { from { transform: scale(1); opacity: 1; } to { transform: scale(9); opacity: 0; } }
     </style>
 </head>
 <body>
     <div id="bar">
-        <select id="area">
-            <option>동쪽</option><option>서쪽</option><option>서귀포</option><option>제주시</option>
+        <h1>🌍 실시간 지진 지도</h1>
+        <select id="feed">
+            <option value="all_hour">지난 1시간 (전체)</option>
+            <option value="all_day" selected>지난 24시간 (전체)</option>
+            <option value="2.5_week">지난 7일 (규모 2.5↑)</option>
+            <option value="4.5_month">지난 30일 (규모 4.5↑)</option>
         </select>
-        <select id="indoor">
-            <option value="">실내/야외 전체</option>
-            <option value="true">실내</option>
-            <option value="false">야외</option>
+        <select id="mag">
+            <option value="0">모든 규모</option>
+            <option value="2">규모 2 이상</option>
+            <option value="4">규모 4 이상</option>
+            <option value="5">규모 5 이상</option>
+            <option value="6">규모 6 이상</option>
         </select>
-        <input id="text" placeholder="예: 서쪽 실내">
-        <button id="go">찾기</button>
-        <span id="msg"></span>
+        <button id="reload">새로고침</button>
+        <span id="stats">불러오는 중...</span>
     </div>
     <div id="map"></div>
-    <ol id="list"></ol>
+    <div id="legend">
+        <b>진원 깊이</b><br>
+        <i style="background:#ff3b5c"></i>얕음 (70km 미만)<br>
+        <i style="background:#ffb13b"></i>중간 (70~300km)<br>
+        <i style="background:#3bb0ff"></i>깊음 (300km 이상)<br>
+        원 크기 = 규모
+    </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const errors = []   // 스크립트 로딩/실행 오류를 화면에 보여주기 위해 모아 둔다
-        window.addEventListener("error", (e) => errors.push(e.message || "파일 로드 실패: " + (e.target && e.target.src)), true)
-    </script>
-    <script src="api/data.js"></script>
-    <script src="api/tools.js"></script>
-    <script>
-        const map = L.map("map").setView([33.38, 126.55], 10)
-        // tile.openstreetmap.org 는 file:// 로 열면(Referer 없음) 403 으로 막는다. http:// 로 열면 OSM, file:// 이면 키 없는 Esri 타일을 쓴다.
-        const isFile = location.protocol === "file:"
-        L.tileLayer(
-            isFile
-                ? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}"
-                : "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-            {
-                maxZoom: 18,
-                attribution: isFile ? "Tiles &copy; Esri" : "&copy; OpenStreetMap contributors",
-            }
-        ).addTo(map)
+        const URL_BASE = "https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/"
+        const map = L.map("map", { worldCopyJump: true }).setView([25, 130], 3)
+        L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 12,
+            attribution: "&copy; OpenStreetMap contributors | 지진 데이터: USGS",
+        }).addTo(map)
         const layer = L.layerGroup().addTo(map)
 
-        const search = () => {
-            if (typeof find_spots !== "function") {
-                document.getElementById("msg").textContent = "api/data.js, api/tools.js 를 불러오지 못했습니다 (index.html 과 같은 폴더에 api 폴더가 있어야 합니다) " + errors.join(" / ")
-                return
-            }
-            // 입력창의 말("서쪽 실내")에서 지역과 실내/야외를 골라 선택값에 반영한다.
-            const text = document.getElementById("text").value
-            for (const a of ["동쪽", "서쪽", "서귀포", "제주시"]) if (text.includes(a)) document.getElementById("area").value = a
-            if (text.includes("실내")) document.getElementById("indoor").value = "true"
-            else if (text.includes("야외")) document.getElementById("indoor").value = "false"
+        const $ = (id) => document.getElementById(id)
+        const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]))
+        const color = (depth) => (depth < 70 ? "#ff3b5c" : depth < 300 ? "#ffb13b" : "#3bb0ff")
 
-            const input = { area: document.getElementById("area").value }
-            const indoor = document.getElementById("indoor").value
-            if (indoor !== "") input.indoor = indoor === "true"
+        let quakes = []
 
-            const { total, spots, error } = find_spots(input)
+        const draw = () => {
             layer.clearLayers()
-            const list = document.getElementById("list")
-            list.innerHTML = ""
-            document.getElementById("msg").textContent = error || `${total}곳 중 ${spots.length}곳 표시`
-            if (error || !spots.length) return
-
-            for (const s of spots) {
-                const place = s.area + " · " + (s.indoor ? "실내" : "야외") + " · " + s.description
-                L.marker([s.lat, s.lng]).addTo(layer).bindPopup(`<b>${s.name}</b><br>${place}`)
-                const li = document.createElement("li")
-                li.textContent = `${s.name} (${place})`
-                list.appendChild(li)
+            const min = Number($("mag").value)
+            const shown = quakes.filter((q) => q.properties.mag >= min)
+            let strongest = null
+            for (const q of shown) {
+                const [lng, lat, depth] = q.geometry.coordinates
+                const { mag, place, time, url } = q.properties
+                if (!strongest || mag > strongest.properties.mag) strongest = q
+                const info = `<b>규모 ${mag}</b><br>${esc(place)}<br>깊이 ${depth} km<br>` +
+                    `${new Date(time).toLocaleString("ko-KR")}<br><a href="${esc(url)}" target="_blank" rel="noopener">상세 보기</a>`
+                L.circleMarker([lat, lng], {
+                    radius: 2 + Math.max(mag, 0) ** 1.7,
+                    color: color(depth), weight: 1, fillColor: color(depth), fillOpacity: 0.45,
+                }).addTo(layer).bindPopup(info)
+                if (mag >= 6) {
+                    L.marker([lat, lng], { icon: L.divIcon({ className: "", html: '<div class="pulse"></div>', iconSize: [12, 12] }), interactive: false }).addTo(layer)
+                }
             }
-            map.fitBounds(spots.map((s) => [s.lat, s.lng]), { padding: [30, 30] })
+            $("stats").textContent = shown.length
+                ? `${shown.length}건 · 최대 규모 ${strongest.properties.mag} (${strongest.properties.place})`
+                : "조건에 맞는 지진이 없습니다"
         }
-        document.getElementById("go").onclick = search
-        document.getElementById("text").onkeydown = (e) => { if (e.key === "Enter") search() }
-        document.getElementById("area").onchange = document.getElementById("indoor").onchange = () => {
-            document.getElementById("text").value = ""
-            search()
+
+        const load = async () => {
+            $("stats").textContent = "불러오는 중..."
+            try {
+                const res = await fetch(URL_BASE + $("feed").value + ".geojson")
+                if (!res.ok) throw new Error("HTTP " + res.status)
+                quakes = (await res.json()).features.filter((q) => q.properties.mag !== null)
+                draw()
+            } catch (e) {
+                $("stats").textContent = "데이터를 불러오지 못했습니다: " + e.message
+            }
         }
-        search()   // 처음 열 때도 바로 표시
+
+        $("feed").onchange = load
+        $("mag").onchange = draw
+        $("reload").onclick = load
+        load()
+        setInterval(load, 60000)   // 1분마다 자동 갱신
     </script>
 </body>
 </html>

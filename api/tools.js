@@ -1,4 +1,4 @@
-// Node 에서는 JSON 파일을 읽고, 브라우저(index.html)에서는 api/data.js 가 만든 전역값을 쓴다.
+// Node 에서는 JSON 파일을 읽고, 브라우저(jeju.html)에서는 api/data.js 가 만든 전역값을 쓴다.
 const isNode = typeof module !== "undefined" && module.exports;
 const spots = isNode ? require("../jeju_spots.json").spots : JEJU_SPOTS;
 const coords = isNode ? require("../jeju_coords.json") : JEJU_COORDS; // { 이름: [lat, lng] }
