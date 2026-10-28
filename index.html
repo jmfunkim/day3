@@ -3,58 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>제주 여행 추천 Agent</title>
+    <title>제주 여행 추천 에이전트</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <style>
-        html, body { height: 100%; margin: 0; font-family: sans-serif; }
+        html, body { height: 100%; margin: 0; font-family: sans-serif; font-size: 13px; }
         body { display: flex; flex-direction: column; }
-        #bar { display: flex; gap: 8px; padding: 10px; background: #0f2a3d; color: #fff; align-items: center; }
-        #bar h1 { font-size: 17px; margin: 0; white-space: nowrap; }
-        #q { flex: 1; padding: 8px 10px; border: 0; border-radius: 6px; font-size: 15px; }
-        #go { padding: 8px 16px; border: 0; border-radius: 6px; background: #ff7a45; color: #fff; font-size: 15px; cursor: pointer; }
-        #go:disabled { opacity: .5; cursor: wait; }
+        #header { flex: none; padding: 12px 14px; background: #0f2a3d; color: #fff; }
+        #header h1 { margin: 0; font-size: 17px; }
         #main { flex: 1; display: flex; min-height: 0; }
+        #chat { width: 280px; flex: none; display: flex; flex-direction: column; border-right: 1px solid #ccc; background: #fff; }
+        #log { flex: 1; overflow-y: auto; padding: 8px; }
+        .msg { max-width: 88%; margin: 0 0 8px; padding: 8px 10px; border-radius: 10px; line-height: 1.5; white-space: pre-wrap; word-break: keep-all; }
+        .bot { background: #f1f1f1; }
+        .me { background: #e3eefb; margin-left: auto; }
+        .tools { margin: -4px 0 8px; font-size: 11px; color: #667; }
+        .tools span { display: inline-block; margin: 0 4px 3px 0; padding: 2px 6px; border-radius: 8px; background: #fff1d6; }
+        .tools span.spot { background: #e3f4e6; }
+        #form { display: flex; gap: 6px; padding: 8px; border-top: 1px solid #ddd; }
+        #q { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid #bbb; border-radius: 6px; }
+        #go { padding: 8px 14px; border: 0; border-radius: 6px; background: #ff7a45; color: #fff; font-size: 14px; cursor: pointer; }
+        #go:disabled { opacity: .5; cursor: wait; }
         #map { flex: 1; }
-        #side { width: 340px; overflow-y: auto; padding: 12px; box-sizing: border-box; background: #f6f8fa; font-size: 14px; }
-        #answer { white-space: pre-wrap; line-height: 1.6; }
-        .step { margin: 4px 0; padding: 6px 8px; border-radius: 6px; background: #e3eefb; font-size: 13px; }
-        .step.weather { background: #fff1d6; }
-        h2 { font-size: 13px; color: #556; margin: 14px 0 6px; }
-        @media (max-width: 700px) { #main { flex-direction: column-reverse; } #side { width: auto; max-height: 45%; } }
+        @media (max-width: 700px) { #main { flex-direction: column-reverse; } #chat { width: auto; height: 50%; border-right: 0; } }
     </style>
 </head>
 <body>
-    <div id="bar">
-        <h1>🏝️ 제주 여행 추천 Agent</h1>
-        <input id="q" value="이번 주말 서쪽에서 갈 만한 곳 추천해줘" maxlength="300">
-        <button id="go">추천받기</button>
-    </div>
+    <div id="header"><h1>🏝️ 제주 여행 추천 Agent</h1></div>
     <div id="main">
-        <div id="map"></div>
-        <div id="side">
-            <div id="answer">질문을 입력하면 agent가 날씨(get_weather)와 장소(find_spots)를 직접 조회해서 추천합니다.</div>
-            <h2>agent가 부른 도구</h2>
-            <div id="trace">-</div>
+    <div id="chat">
+        <div id="log">
+            <div class="msg bot">안녕하세요! 제주 여행 추천 에이전트예요. 날씨와 장소 목록을 직접 조회해서 추천해 드려요.
+예) "내일 서귀포에서 가족이랑 갈 만한 곳 추천해줘"</div>
         </div>
+        <form id="form">
+            <input id="q" placeholder="어디서 뭘 하고 싶으세요?" maxlength="300" autocomplete="off">
+            <button id="go">보내기</button>
+        </form>
+    </div>
+    <div id="map"></div>
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
         const $ = (id) => document.getElementById(id)
-        const map = L.map("map").setView([33.38, 126.55], 10)
+        const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]))
+        const JEJU = [[33.1, 126.1], [33.6, 127.0]]   // 제주도 전체가 보이는 범위
+        const map = L.map("map").fitBounds(JEJU)
         L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
             maxZoom: 18,
-            attribution: "&copy; OpenStreetMap contributors | 날씨: Open-Meteo",
+            attribution: "&copy; OpenStreetMap contributors",
         }).addTo(map)
         const layer = L.layerGroup().addTo(map)
 
-        const ask = async () => {
+        const add = (cls, text) => {
+            const div = document.createElement("div")
+            div.className = "msg " + cls
+            div.textContent = text
+            $("log").appendChild(div)
+            $("log").scrollTop = $("log").scrollHeight
+            return div
+        }
+
+        const addTools = (trace) => {
+            const div = document.createElement("div")
+            div.className = "tools"
+            for (const t of trace) {
+                const s = document.createElement("span")
+                s.className = t.name === "get_weather" ? "" : "spot"
+                const { area, days, indoor } = t.input
+                s.textContent = t.name === "get_weather"
+                    ? `☁️ 날씨 ${area} ${days || 3}일`
+                    : `📍 장소 ${area} ${indoor === undefined ? "전체" : indoor ? "실내" : "야외"}`
+                div.appendChild(s)
+            }
+            $("log").appendChild(div)
+        }
+
+        const showSpots = (answer, spots) => {
+            layer.clearLayers()
+            // 답변에서 언급한 장소만 찍고, 없으면 조회된 장소 전부를 찍는다.
+            const picked = spots.filter((s) => answer.includes(s.name))
+            const marks = picked.length ? picked : spots
+            for (const s of marks) {
+                L.marker([s.lat, s.lng]).addTo(layer).bindPopup(`<b>${esc(s.name)}</b><br>${esc(s.area)} · ${s.indoor ? "실내" : "야외"} · ${esc(s.description)}`)
+            }
+            if (marks.length) map.fitBounds(marks.map((s) => [s.lat, s.lng]), { padding: [60, 60], maxZoom: 12 })
+        }
+
+        $("form").onsubmit = async (e) => {
+            e.preventDefault()
             const question = $("q").value.trim()
             if (!question) return
+            $("q").value = ""
             $("go").disabled = true
-            $("answer").textContent = "agent가 도구를 호출하는 중..."
-            $("trace").textContent = "-"
-            layer.clearLayers()
+            add("me", question)
+            const wait = add("bot", "날씨와 장소를 찾는 중…")
             try {
                 const res = await fetch("/api/chat", {
                     method: "POST",
@@ -63,34 +106,15 @@
                 })
                 const data = await res.json()
                 if (!res.ok) throw new Error(data.error || "HTTP " + res.status)
-                show(data)
-            } catch (e) {
-                $("answer").textContent = "오류: " + e.message
+                wait.textContent = data.answer
+                addTools(data.trace)
+                showSpots(data.answer, data.spots)
+            } catch (err) {
+                wait.textContent = "오류가 났어요: " + err.message
             }
             $("go").disabled = false
+            $("log").scrollTop = $("log").scrollHeight
         }
-
-        const show = ({ answer, trace, spots }) => {
-            $("answer").textContent = answer
-            $("trace").innerHTML = ""
-            for (const t of trace) {
-                const div = document.createElement("div")
-                div.className = "step" + (t.name === "get_weather" ? " weather" : "")
-                div.textContent = `${t.name === "get_weather" ? "☁️" : "📍"} ${t.name}(${JSON.stringify(t.input)})`
-                $("trace").appendChild(div)
-            }
-            // 답변에서 실제로 언급한 장소만 지도에 찍고, 없으면 조회된 장소 전부를 찍는다.
-            const picked = spots.filter((s) => answer.includes(s.name))
-            const marks = picked.length ? picked : spots
-            for (const s of marks) {
-                L.marker([s.lat, s.lng]).addTo(layer).bindPopup(`<b>${esc(s.name)}</b><br>${esc(s.area)} · ${s.indoor ? "실내" : "야외"} · ${esc(s.description)}`)
-            }
-            if (marks.length) map.fitBounds(marks.map((s) => [s.lat, s.lng]), { padding: [40, 40], maxZoom: 12 })
-        }
-        const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]))
-
-        $("go").onclick = ask
-        $("q").onkeydown = (e) => { if (e.key === "Enter") ask() }
     </script>
 </body>
 </html>
