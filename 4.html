@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="kr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <script>
+        let data = {}
+        let v = Array.from({length:100}, (_, i) => i + 1)   // 1 ~ 100
+        for (const i of v) {
+            // 키마다 배열 길이가 다름: 101 ~ 200개
+            data["a"+i] = Array.from({length: 100 + i}, (_, j) => i * 1000 + j)
+        }
+        const show = (id)=> console.log(id + "를 보여줘")
+        for (const i of v) {
+            for (const element of data["a"+i]) {
+                console.log(element+"\n")
+                show(element)
+            }
+        }
+    </script>
+</body>
+</html>
