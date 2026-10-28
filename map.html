@@ -22,6 +22,7 @@
             <option value="true">실내</option>
             <option value="false">야외</option>
         </select>
+        <input id="text" placeholder="예: 서쪽 실내">
         <button id="go">찾기</button>
         <span id="msg"></span>
     </div>
@@ -46,7 +47,17 @@
         ).addTo(map)
         const layer = L.layerGroup().addTo(map)
 
-        document.getElementById("go").onclick = () => {
+        const search = () => {
+            if (typeof find_spots !== "function") {
+                document.getElementById("msg").textContent = "api/data.js, api/tools.js 를 불러오지 못했습니다 (map.html 과 같은 폴더에 api 폴더가 있어야 합니다)"
+                return
+            }
+            // 입력창의 말("서쪽 실내")에서 지역과 실내/야외를 골라 선택값에 반영한다.
+            const text = document.getElementById("text").value
+            for (const a of ["동쪽", "서쪽", "서귀포", "제주시"]) if (text.includes(a)) document.getElementById("area").value = a
+            if (text.includes("실내")) document.getElementById("indoor").value = "true"
+            else if (text.includes("야외")) document.getElementById("indoor").value = "false"
+
             const input = { area: document.getElementById("area").value }
             const indoor = document.getElementById("indoor").value
             if (indoor !== "") input.indoor = indoor === "true"
@@ -67,6 +78,13 @@
             }
             map.fitBounds(spots.map((s) => [s.lat, s.lng]), { padding: [30, 30] })
         }
+        document.getElementById("go").onclick = search
+        document.getElementById("text").onkeydown = (e) => { if (e.key === "Enter") search() }
+        document.getElementById("area").onchange = document.getElementById("indoor").onchange = () => {
+            document.getElementById("text").value = ""
+            search()
+        }
+        search()   // 처음 열 때도 바로 표시
     </script>
 </body>
 </html>
